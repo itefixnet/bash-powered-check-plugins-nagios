@@ -1,0 +1,56 @@
+#!/bin/bash
+# Checks Ubuntu updates including security
+
+# Exit codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+exitcode=$UNKNOWN
+codetext=("Ok" "Warning" "Critical" "Unknown")
+
+# Usage help
+usage() {
+
+  text="
+USAGE: ${0} [-c <number> | -w <number>]
+-c : return critical if the number of security updates exceeds the limit
+-w : return warning instead
+"
+  echo "$text"
+
+  exit $exitcode
+}
+
+# check for command line arguments
+while getopts "w:c:h" option
+do
+  case "$option" in
+    c) critical=$OPTARG;;
+    w) warning=$OPTARG;;
+    h) usage;;
+    *) usage;;
+  esac
+done
+
+APTCHECK=$(/usr/lib/update-notifier/apt-check 2>&1)
+UPDATES=$(echo $APTCHECK | cut -d ';' -f 1)
+SECURITY=$(echo $APTCHECK | cut -d ';' -f 2)
+
+if [[ -z $UPDATES || -z $SECURITY ]]
+then
+  echo "No recognizable output."
+  exit $UNKNOWN
+fi
+
+exitcode=$OK
+
+message="$UPDATES updates ($SECURITY security)|'All updates'=$UPDATES 'Security updates'=$SECURITY"
+
+# threshold checks
+[[ (! -z $warning) && ($SECURITY -ge $warning) ]] && exitcode=$WARNING
+[[ (! -z $critical) && ($SECURITY -ge $critical) ]] && exitcode=$CRITICAL
+
+echo "Ubuntu updates ${codetext[$exitcode]} - $message"
+exit $exitcode
