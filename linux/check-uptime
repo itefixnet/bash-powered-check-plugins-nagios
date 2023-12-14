@@ -1,8 +1,6 @@
 #!/bin/bash
 # Checks uptime
 # Requires a platform supporting /proc/uptime and date tool
-# Provided by itefix.net
-#
 
 # Exit codes
 OK=0
