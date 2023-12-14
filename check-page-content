@@ -1,0 +1,68 @@
+!/bin/bash
+# Checks if content of a web page has been changed
+# Requires: curl, sha256sum and a working directory for state information
+
+# Exit codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+exitcode=$UNKNOWN
+codetext=("Ok" "Warning" "Critical" "Unknown")
+
+# Usage help
+usage() {
+
+  text="
+USAGE: ${0} -u <url> -p <working folder> [-c | -w]
+-u <url> : url of the content (required)
+-p <path>: writable folder for temporary storage (required)
+-c : return critical if changed
+-w : return warning if changed
+"
+  echo "$text"
+
+  exit $exitcode
+}
+
+# check for command line arguments
+while getopts "u:p:wch" option
+do
+  case "$option" in
+    u) url=$OPTARG;;
+    p) path=$OPTARG;;
+    c) exitcode=$CRITICAL;;
+    w) exitcode=$WARNING;;
+    h) usage;;
+    *) usage;;
+  esac
+done
+
+if [ -z "$url" ] || [ -z "$path" ]
+then
+  usage
+fi
+
+# use url hash value asa path base
+pathbase=$(echo $url | sha256sum | cut -d ' ' -f 1)
+curr_hash_path="$path/$pathbase.current"
+prev_hash_path="$path/$pathbase.previous"
+
+# Create a previous copy if not exist
+if [ ! -f "$prev_hash_path" ]; then
+    touch $prev_hash_path
+fi
+
+# Use a hash value instead of the whole content
+wget -qO- $url | sha256sum > $curr_hash_path
+modified=$(diff $curr_hash_path $prev_hash_path)
+
+if [ ! -z "$modified" ]; then
+    echo "$url content has changed."
+    cp $curr_hash_path $prev_hash_path
+    exit $exitcode
+fi
+
+echo "No changes in $url content."
+exit $OK
