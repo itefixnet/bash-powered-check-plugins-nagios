@@ -1,8 +1,6 @@
 #!/bin/bash
 # Checks backup statistics part of a Duplicity log file
 # NB! Set Nagios service parameter "max_check_attempts" to 1 for proper operation.
-# Provided by itefix.net
-#
 
 <<'LOG_SEGMENT_EXAMPLE'
 --------------[ Backup Statistics ]--------------
