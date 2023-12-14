@@ -1,6 +1,7 @@
 !/bin/bash
 # Checks if content of a web page has been changed
 # Requires: curl, sha256sum and a working directory for state information
+# Set Nagios service parameter max_check_attempts to 1 for proper operation.
 
 # Exit codes
 OK=0
