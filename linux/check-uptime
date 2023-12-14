@@ -1,0 +1,57 @@
+#!/bin/bash
+# Checks uptime
+# Requires a platform supporting /proc/uptime and date tool
+# Provided by itefix.net
+#
+
+# Exit codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+exitcode=$UNKNOWN
+codetext=("Ok" "Warning" "Critical" "Unknown")
+
+# Usage help
+usage() {
+
+  text="
+USAGE: ${0} -c <seconds> -w <seconds>
+
+-c: return CRITICAL if uptime is shorter than the value 
+-w: return WARNING if uptime is shorter than the value
+"
+  echo "$text"
+
+  exit $exitcode
+}
+
+# check for command line arguments
+while getopts "w:c:h" option
+do
+  case "$option" in
+    c) critical=$OPTARG;;
+    w) warning=$OPTARG;;
+    h) usage;;
+    *) usage;;
+  esac
+done
+
+[[ ! -f "/proc/uptime" ]] && echo "/proc/uptime does not exist." && exit $exitcode
+
+# Extract the first value and strip off decimal part
+uptime=$(cat /proc/uptime | cut -d' ' -f1)
+uptime=${uptime%.*}
+
+exitcode=$OK
+
+# date magic
+message=$(echo $(($uptime/86400))" days" $(date -d "1970-01-01 + $uptime seconds" "+%H hours %M minutes %S seconds"))
+
+# threshold checks
+[[ (! -z $warning) && ($uptime -lt $warning) ]] && exitcode=$WARNING
+[[ (! -z $critical) && ($uptime -lt $critical) ]] && exitcode=$CRITICAL
+
+echo "Uptime ${codetext[$exitcode]} - $message"
+exit $exitcode
