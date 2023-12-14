@@ -1,0 +1,132 @@
+#!/bin/bash
+# Checks backup statistics part of a Duplicity log file
+# NB! Set Nagios service parameter "max_check_attempts" to 1 for proper operation.
+# Provided by itefix.net
+#
+
+<<'LOG_SEGMENT_EXAMPLE'
+--------------[ Backup Statistics ]--------------
+StartTime 1589934609.17 (Wed May 20 02:30:09 2020)
+EndTime 1589934611.97 (Wed May 20 02:30:11 2020)
+ElapsedTime 2.80 (2.80 seconds)
+SourceFiles 13106
+SourceFileSize 1012789998 (966 MB)
+NewFiles 5
+NewFileSize 114206 (112 KB)
+DeletedFiles 0
+ChangedFiles 0
+ChangedFileSize 0 (0 bytes)
+ChangedDeltaSize 0 (0 bytes)
+DeltaEntries 5
+RawDeltaSize 77342 (75.5 KB)
+TotalDestinationSizeChange 23197 (22.7 KB)
+Errors 0
+-------------------------------------------------
+LOG_SEGMENT_EXAMPLE
+
+# Exit codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+exitcode=$UNKNOWN
+codetext=("Ok" "Warning" "Critical" "Unknown")
+
+# Usage help
+usage() {
+
+  text="
+USAGE: ${0} -l <path> [-c | -w]
+-l <path> : Duplicity log file path (required)
+-c : return critical if errors
+-w : return warning if errors
+"
+  echo "$text"
+
+  exit $exitcode
+}
+
+# check for command line arguments
+while getopts "l:wch" option
+do
+  case "$option" in
+    l) logfile=$OPTARG;;
+    c) exitcode=$CRITICAL;;
+    w) exitcode=$WARNING;;
+    h) usage;;
+    *) usage;;
+  esac
+done
+
+[[ -z $logfile ]] && usage
+
+[[ ! -f $logfile ]] && echo "Log file $logfile does not exist." && exit $exitcode
+
+# Metrics array
+declare -A metrics=()
+
+# Extract statistics from the bottom of the log file
+stats=$(tail -25 $logfile | sed -n '/--------------\[ Backup Statistics \]--------------/,$p')
+
+# Populates the metrics array, message and perfdata
+# 1.argument: Metrics name, 2.argument: Nagios perfdata metrics unit (s,B,empty)
+function ExtractNumericMetric ()
+{
+  [[ $stats =~ $1[[:blank:]]([0-9.]+)\s? ]]
+
+  metrics[$1]=${BASH_REMATCH[1]}
+
+  [[ -z ${metrics[$1]} ]] && echo "Metric $1 can't be extracted. Possible backup problem." && exit $UNKNOWN
+
+  message+="$1: "
+
+  # Human output
+  case "$2" in
+
+  s)  message+="${metrics[$1]} secs"
+      ;;
+  B)  sizekb=$((${metrics[$1]}/1024))
+      message+="$sizekb KB"
+      ;;
+  *)  message+="${metrics[$1]}"
+      ;;
+
+  esac
+
+  message+=", "
+
+  perfdata+="$1=${metrics[$1]}$2 "
+
+}
+
+perfdata=""
+message=""
+
+ExtractNumericMetric StartTime
+ExtractNumericMetric EndTime
+
+start_time=$(date -d@${metrics[StartTime]})
+end_time=$(date -d@${metrics[EndTime]})
+message="Started: ${start_time}, Ended: ${end_time}, "
+perfdata=""
+
+# Extract metrics
+ExtractNumericMetric ElapsedTime s
+ExtractNumericMetric SourceFiles
+ExtractNumericMetric SourceFileSize B
+ExtractNumericMetric NewFiles
+ExtractNumericMetric NewFileSize B
+ExtractNumericMetric DeletedFiles
+ExtractNumericMetric ChangedFiles
+ExtractNumericMetric ChangedFileSize B
+ExtractNumericMetric ChangedDeltaSize B
+ExtractNumericMetric DeltaEntries
+ExtractNumericMetric RawDeltaSize B
+ExtractNumericMetric TotalDestinationSizeChange B
+ExtractNumericMetric Errors
+
+[[ ${metrics[Errors]} -eq 0 ]] && exitcode=$OK
+
+echo "Duplicity ${codetext[$exitcode]} - ${message%??} | ${perfdata}"
+exit $exitcode
