@@ -1,0 +1,44 @@
+#!/bin/bash
+# Checks if reboot is required on Ubuntu
+
+# Exit codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+exitcode=$UNKNOWN
+codetext=("Ok" "Warning" "Critical" "Unknown")
+
+# Usage help
+usage() {
+
+  text="
+USAGE: ${0} [-c | -w]
+-c : return critical if reboot required
+-w : return warning if reboot required
+"
+  echo "$text"
+
+  exit $exitcode
+}
+
+# check for command line arguments
+while getopts "wch" option
+do
+  case "$option" in
+    c) exitcode=$CRITICAL;;
+    w) exitcode=$WARNING;;
+    h) usage;;
+    *) usage;;
+  esac
+done
+
+if [[ -f "/var/run/reboot-required" ]]
+then
+    echo "Reboot required."
+    exit $exitcode
+fi
+
+echo "No reboot required."
+exit $OK
